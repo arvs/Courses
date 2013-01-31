@@ -4,7 +4,7 @@ class Section < ActiveRecord::Base
   belongs_to :department
   belongs_to :subject
 
-  def self.update_or_create( url )
+  def self.update_or_create( hash_data )
     require 'open-uri'
 
     begin
@@ -17,72 +17,56 @@ class Section < ActiveRecord::Base
     html = doc.to_html.gsub(/<\/?[^>]*>/, " ")
 
     # initialize section by section key
-    match = html.match(/Section key\s*([^\n]+)/)
-    section = Section.find_or_create_by_section_key( match[1].strip )
+    section = Section.find_or_create_by_section_key( hash_data[:section_key] )
 
     # only update section if it has not been touch in the last 12 hours
     # return section unless section.call_number.nil?
 
     # section number
-    match = doc.css("title").first.content.strip.match( /section\s*0*([0-9]+)/ )
-    section.section_number = match[1].strip
+    section.section_number = hash_data[:section_number]
 
     #title
-    full_title = doc.css( 'td[colspan="2"]' )[1].to_html.gsub(/<\/?[^>]*>/, " ").strip
-    title = doc.css("title").first.content.strip
-    section.title = full_title.gsub( title, "" ).gsub( /\s+/, " " ).gsub( "&amp;", "&" ).strip
-
+    section.title = hash_data[:title]
+      
     # subject
-    match = section.section_key.match( /^[0-9]+([A-Z]+)/ )
-    section.subject = Subject.find_or_create_by_abbreviation( match[1].strip )
+    section.subject = Subject.find_or_create_by_abbreviation( hash_data[:subject_id] )
 
     #meta
-    section.url = url
-    section.semester = doc.css('meta[name="semes"]').first.attribute("content")
-    section.description = doc.css('meta[name="description"]').first.attribute("content")
+    section.url = hash_data[:url]
+    section.semester = hash_data[:semester]
+    section.description = hash_data[:description]
 
-    instructor_name = doc.css('meta[name="instr"]').first.attribute("content").value.split( ", " )[0]
-
-    section.instructor = Instructor.find_or_create_by_name( instructor_name )
+    section.instructor = Instructor.find_or_create_by_name( hash_data[:instructor_id] )
 
     if html =~ /Department/
-      match = html.match(/Department\s*([^\n]+)/)
-      section.department = Department.find_or_create_by_title( match[1].strip )
+      section.department = Department.find_or_create_by_title( hash_data[:department_id] )
     end
 
     if html =~ /Call Number/
-      match = html.match(/Call Number\s*([^\n]+)/)
-      section.call_number = match[1].strip
+      section.call_number = hash_data[:call_number]
     end
 
     if html =~ /Day \&amp; Time Location/
-      match = html.match(/Day \&amp; Time Location\s*([A-Za-z]+)\s*([^-]+)-([^\s]+)\s([^\n]+)/)
-      section.days = match[1].strip
+      section.days = hash_data[:days]
 
-      start_time = Time.parse( match[2].strip )
-      end_time = Time.parse( match[3].strip )
-
-      section.start_time = start_time.localtime.hour + (start_time.localtime.min/60.0)
-      section.end_time = end_time.localtime.hour + (end_time.localtime.min/60.0)
-
-      if match[4].strip != "To be announced"
-        match = match[4].strip.match( /([^\s]+)\s*(.+)/ )
-        section.room = match[1].strip
-        section.building = match[2].strip
+      section.start_time = hash_data[:start_time]
+      section.end_time = hash_data[:end_time]
+      
+      #Needs to be changed to check file for TBA
+      if match[4].strip != "To be announced" 
+        section.room = hash_data[:room]
+        section.building = hash_data[:building]
       end
     end
 
     if html =~ /[0-9]+ students \([0-9]+ max/
-      match = html.match( /([0-9]+) students \(([0-9]+) max/ )
-      section.enrollment = match[1].strip
-      section.max_enrollment = match[2].strip
+      section.enrollment = hash_data[:enrollment]
+      section.max_enrollment = hash_data[:max_enrollment]
     end
 
     # course
     if html =~ /\n\s*Number\s*\n/
-      match = html.match( /\n\s*Number\s*\n\s*([A-Z0-9]+)/ )
-      course_key = section.subject.abbreviation + match[1]
-      section.course = Course.update_or_create( course_key )
+      section.course = Course.update_or_create( hash_data[:course_id] )
     end
 
     section.save!
