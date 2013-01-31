@@ -4,70 +4,45 @@ class Section < ActiveRecord::Base
   belongs_to :department
   belongs_to :subject
 
-  def self.update_or_create( hash_data )
-    require 'open-uri'
-
-    begin
-      doc = Nokogiri::HTML(open( url ))
-    rescue
-      puts "Bad section url"
-      return
-    end
-
-    html = doc.to_html.gsub(/<\/?[^>]*>/, " ")
-
+  def self.update_or_create( info )
     # initialize section by section key
-    section = Section.find_or_create_by_section_key( hash_data[:section_key] )
+    section = Section.find_or_create_by_section_key(info["Term"] + info["Course"])
 
     # only update section if it has not been touch in the last 12 hours
     # return section unless section.call_number.nil?
 
     # section number
-    section.section_number = hash_data[:section_number]
+    section.section_number = info["Course"][-3..-2]
 
     #title
-    section.title = hash_data[:title]
+    section.title = info["CourseTitle"]
       
     # subject
-    section.subject = Subject.find_or_create_by_abbreviation( hash_data[:subject_id] )
+    section.subject = Subject.find_or_create_by_title_and_abbreviation(info["PrefixName"], info["Course"][0,4])
 
     #meta
-    section.url = hash_data[:url]
-    section.semester = hash_data[:semester]
-    section.description = hash_data[:description]
+    section.url = "http://www.columbia.edu/cu/bulletin/uwb/subj/" + info["Course"][0,4] + "/" + info["Course"][8] + info["Course"][4,4] + "-" + info["Term"] + "-" + info["Course"][-3..-1] + "/"
+    section.semester = info["Term"]
+    section.description = info["ClassNotes"]
+    section.instructor = Instructor.find_or_create_by_name(info["Instructor1Name"])
+    section.department = Department.find_or_create_by_title_and_abbreviation(info["DepartmentName"], info["DepartmentCode"])
+    section.call_number = info["CallNumber"]
 
-    section.instructor = Instructor.find_or_create_by_name( hash_data[:instructor_id] )
+    #Need more info about json syntax to update
+    =begin
+      section.days = info[:days]
+      section.start_time = info[:start_time]
+      section.end_time = info[:end_time]
+      section.room = info[:room]
+      section.building = info[:building]
+    =end
 
-    if html =~ /Department/
-      section.department = Department.find_or_create_by_title( hash_data[:department_id] )
-    end
-
-    if html =~ /Call Number/
-      section.call_number = hash_data[:call_number]
-    end
-
-    if html =~ /Day \&amp; Time Location/
-      section.days = hash_data[:days]
-
-      section.start_time = hash_data[:start_time]
-      section.end_time = hash_data[:end_time]
-      
-      #Needs to be changed to check file for TBA
-      if match[4].strip != "To be announced" 
-        section.room = hash_data[:room]
-        section.building = hash_data[:building]
-      end
-    end
-
-    if html =~ /[0-9]+ students \([0-9]+ max/
-      section.enrollment = hash_data[:enrollment]
-      section.max_enrollment = hash_data[:max_enrollment]
-    end
+    # enrollment
+    section.enrollment = info["NumEnrolled"]
+    section.max_enrollment = info["MaxSize"]
 
     # course
-    if html =~ /\n\s*Number\s*\n/
-      section.course = Course.update_or_create( hash_data[:course_id] )
-    end
+    section.course = Course.update_or_create(info)
 
     section.save!
   end
