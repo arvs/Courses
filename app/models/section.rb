@@ -29,11 +29,13 @@ class Section < ActiveRecord::Base
     section.call_number = info["CallNumber"]
 
     #Need more info about json syntax to update
-    # section.days = info[:days]
-    # section.start_time = info[:start_time]
+    section.days = info["Meets1"][0,2]
+    # Broken
+    # section.start_time = Time.strptime(info["Meets1"][7,5],"%H:%M").to_f + (info["Meets1"][12,1] == "p" ? 12 : 0)
     # section.end_time = info[:end_time]
-    # section.room = info[:room]
-    # section.building = info[:building]
+
+    section.room = info["Meets1"][-3..-1]
+    section.building = info[:building]
 
     # enrollment
     section.enrollment = info["NumEnrolled"]
